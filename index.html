@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>坐标寻宝特工 Coordinate Treasure Agent</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #f4f4ff;
+        color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .game-wrapper {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        padding: 20px 24px 24px;
+        max-width: 1000px;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 520px 1fr;
+        gap: 20px;
+      }
+
+      h1 {
+        grid-column: 1 / -1;
+        text-align: center;
+        margin-bottom: 10px;
+        font-size: 1.8rem;
+        color: #6a00b9;
+      }
+
+      .subtitle {
+        grid-column: 1 / -1;
+        text-align: center;
+        margin-bottom: 14px;
+        font-size: 0.95rem;
+        color: #555;
+      }
+
+      .canvas-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      canvas {
+        border-radius: 12px;
+        background: #fafaff;
+        box-shadow: inset 0 0 0 1px rgba(120, 81, 169, 0.3);
+        cursor: crosshair;
+      }
+
+      .hint-text {
+        font-size: 0.9rem;
+        color: #555;
+      }
+
+      .side-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        font-size: 0.95rem;
+      }
+
+      .panel-section {
+        border-radius: 12px;
+        background: #f9f5ff;
+        padding: 10px 12px;
+        border: 1px solid rgba(120, 81, 169, 0.2);
+      }
+
+      .panel-section h2 {
+        font-size: 1rem;
+        margin-bottom: 6px;
+        color: #6a00b9;
+      }
+
+      .stats-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        background: #ede7ff;
+        color: #4b0082;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .badge strong {
+        font-weight: 600;
+      }
+
+      .big-target {
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: #e65100;
+      }
+
+      .feedback {
+        margin-top: 4px;
+        min-height: 1.2em;
+        font-weight: 500;
+      }
+
+      .feedback.good {
+        color: #2e7d32;
+      }
+
+      .feedback.bad {
+        color: #c62828;
+      }
+
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+
+      button {
+        border-radius: 999px;
+        border: none;
+        padding: 8px 14px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        background: #7c4dff;
+        color: #fff;
+        font-weight: 600;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        transition: transform 0.05s ease, box-shadow 0.05s ease,
+          background 0.2s ease;
+      }
+
+      button:hover {
+        background: #673ab7;
+        transform: translateY(-1px);
+        box-shadow: 0 5px 12px rgba(0, 0, 0, 0.18);
+      }
+
+      button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      }
+
+      button.secondary {
+        background: #ece6ff;
+        color: #4b0082;
+        box-shadow: none;
+      }
+
+      button.secondary:hover {
+        background: #ddd2ff;
+        box-shadow: none;
+      }
+
+      .tips-list {
+        margin-left: 18px;
+        margin-top: 4px;
+      }
+
+      .tips-list li {
+        margin-bottom: 2px;
+      }
+
+      @media (max-width: 900px) {
+        .game-wrapper {
+          grid-template-columns: 1fr;
+        }
+
+        .canvas-container {
+          order: 2;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="game-wrapper">
+      <h1>坐标寻宝特工</h1>
+      <div class="subtitle">
+        任务：在藏宝地图（坐标系）上找到指定的坐标点！先看
+        <strong>x</strong>（左右），再看 <strong>y</strong>（上下）。
+      </div>
+
+      <!-- 左侧：画布 -->
+      <div class="canvas-container">
+        <canvas id="gridCanvas" width="480" height="480"></canvas>
+        <div class="hint-text">提示：点击网格上的整点（交叉点）。</div>
+      </div>
+
+      <!-- 右侧：信息 + 控制 -->
+      <div class="side-panel">
+        <div class="panel-section">
+          <h2>当前任务</h2>
+          <div>请找到宝藏坐标：</div>
+          <div id="targetDisplay" class="big-target">
+            点击“开始游戏”生成任务
+          </div>
+          <div id="feedback" class="feedback"></div>
+        </div>
+
+        <div class="panel-section">
+          <h2>分数与回合</h2>
+          <div class="stats-row">
+            <span class="badge">得分：<strong id="scoreDisplay">0</strong></span>
+            <span class="badge"
+              >回合：<strong id="roundDisplay">0</strong>/<span
+                id="maxRoundDisplay"
+                >10</span
+              ></span
+            >
+            <span class="badge">正确数：<strong id="correctDisplay">0</strong></span>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>操作</h2>
+          <div class="controls">
+            <button id="startBtn">开始游戏</button>
+            <button id="restartBtn" class="secondary">重新开始</button>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>小提示</h2>
+          <ul class="tips-list">
+            <li>坐标写作 <code>(x, y)</code>：先写 x，再写 y。</li>
+            <li>在 x 轴上向左/向右数到 x；再在 y 轴上向上/向下数到 y。</li>
+            <li>本游戏只用到<strong>正整数</strong>坐标，适合 10 岁学生练习。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ====== 画布与坐标系设置 ======
+      const canvas = document.getElementById("gridCanvas");
+      const ctx = canvas.getContext("2d");
+
+      const width = canvas.width;
+      const height = canvas.height;
+
+      // 预留边距用来画坐标轴刻度和数字
+      const marginLeft = 40;
+      const marginBottom = 40;
+      const marginTop = 20;
+      const marginRight = 20;
+
+      // 基础范围 0–10，格子大小根据画布自动计算
+      const maxBase = 10;
+      const gridSizeX = (width - marginLeft - marginRight) / maxBase;
+      const gridSizeY = (height - marginTop - marginBottom) / maxBase;
+      const gridSize = Math.min(gridSizeX, gridSizeY);
+
+      const originX = marginLeft;
+      const originY = height - marginBottom;
+
+      // 游戏状态变量
+      let minCoord = 1;
+      let maxCoord = 10; // 范围固定为 1–10
+      let targetX = null;
+      let targetY = null;
+      let score = 0;
+      let round = 0;
+      let maxRound = 10; // 默认固定10回合
+      let correctCount = 0;
+      let isRunning = false;
+
+      // UI 元素
+      const targetDisplay = document.getElementById("targetDisplay");
+      const feedback = document.getElementById("feedback");
+      const scoreDisplay = document.getElementById("scoreDisplay");
+      const roundDisplay = document.getElementById("roundDisplay");
+      const maxRoundDisplay = document.getElementById("maxRoundDisplay");
+      const correctDisplay = document.getElementById("correctDisplay");
+      const startBtn = document.getElementById("startBtn");
+      const restartBtn = document.getElementById("restartBtn");
+
+      // ====== 绘制坐标系 ======
+      function drawGrid() {
+        ctx.clearRect(0, 0, width, height);
+
+        // 背景
+        ctx.fillStyle = "#fafaff";
+        ctx.fillRect(0, 0, width, height);
+
+        // 网格线
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#e0ddff";
+        ctx.beginPath();
+        for (let i = 0; i <= maxBase; i++) {
+          const x = originX + i * gridSize;
+          const yTop = originY - maxBase * gridSize;
+
+          // 竖线
+          ctx.moveTo(x, originY);
+          ctx.lineTo(x, yTop);
+
+          const y = originY - i * gridSize;
+          const xRight = originX + maxBase * gridSize;
+
+          // 横线
+          ctx.moveTo(originX, y);
+          ctx.lineTo(xRight, y);
+        }
+        ctx.stroke();
+
+        // 坐标轴
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#9c27b0";
+        ctx.beginPath();
+
+        // x 轴
+        ctx.moveTo(originX, originY);
+        ctx.lineTo(originX + maxBase * gridSize + 10, originY);
+
+        // y 轴
+        ctx.moveTo(originX, originY);
+        ctx.lineTo(originX, originY - maxBase * gridSize - 10);
+        ctx.stroke();
+
+        // x、y 轴箭头
+        ctx.beginPath();
+
+        // x arrow
+        let ax = originX + maxBase * gridSize + 10;
+        let ay = originY;
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 8, ay - 4);
+        ctx.lineTo(ax - 8, ay + 4);
+        ctx.closePath();
+        ctx.fillStyle = "#9c27b0";
+        ctx.fill();
+
+        // y arrow
+        ax = originX;
+        ay = originY - maxBase * gridSize - 10;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 4, ay + 8);
+        ctx.lineTo(ax + 4, ay + 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // 刻度数字
+        ctx.fillStyle = "#6a00b9";
+        ctx.font = "22px system-ui, sans-serif";
+
+        // x 轴数字：0–10
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        for (let i = 0; i <= maxBase; i++) {
+          const x = originX + i * gridSize;
+          const yLabel = originY + 5;
+          ctx.fillText(i.toString(), x, yLabel);
+        }
+
+        // y 轴数字：1–10（不重复 0）
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (let i = 1; i <= maxBase; i++) {
+          const y = originY - i * gridSize;
+          const xLabel = originX - 5;
+          ctx.fillText(i.toString(), xLabel, y);
+        }
+
+        // 轴名称
+        ctx.fillStyle = "#9c27b0";
+        ctx.font = "26px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText("x", originX + maxBase * gridSize + 40, originY + 20);
+
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText("y", originX - 35, originY - maxBase * gridSize - 20);
+      }
+
+      // 画点击的点
+      function drawClickPoint(x, y, color) {
+        const px = originX + x * gridSize;
+        const py = originY - y * gridSize;
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      // 画宝藏（用小星星表示）
+      function drawTreasure(x, y) {
+        const px = originX + x * gridSize;
+        const py = originY - y * gridSize;
+        const rOuter = 10;
+        const rInner = 5;
+        const spikes = 5;
+        let rot = (Math.PI / 2) * 3;
+        let step = Math.PI / spikes;
+
+        ctx.beginPath();
+        ctx.moveTo(px, py - rOuter);
+        for (let i = 0; i < spikes; i++) {
+          let xOuter = px + Math.cos(rot) * rOuter;
+          let yOuter = py + Math.sin(rot) * rOuter;
+          ctx.lineTo(xOuter, yOuter);
+          rot += step;
+
+          let xInner = px + Math.cos(rot) * rInner;
+          let yInner = py + Math.sin(rot) * rInner;
+          ctx.lineTo(xInner, yInner);
+          rot += step;
+        }
+        ctx.lineTo(px, py - rOuter);
+        ctx.closePath();
+        ctx.fillStyle = "#ffb300";
+        ctx.strokeStyle = "#f57c00";
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // ====== 工具函数 ======
+      function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function screenToGrid(mouseX, mouseY) {
+        const rect = canvas.getBoundingClientRect();
+        const xInCanvas = mouseX - rect.left;
+        const yInCanvas = mouseY - rect.top;
+
+        const dx = xInCanvas - originX;
+        const dy = originY - yInCanvas; // 注意 y 方向
+
+        const gridX = Math.round(dx / gridSize);
+        const gridY = Math.round(dy / gridSize);
+
+        return { x: gridX, y: gridY };
+      }
+
+      // ====== 游戏逻辑 ======
+      function applyFixedSettings() {
+        // 坐标范围固定 1–10，回合数固定 10
+        minCoord = 1;
+        maxCoord = 10;
+        maxRound = 10;
+        if (maxRoundDisplay) {
+          maxRoundDisplay.textContent = maxRound.toString();
+        }
+      }
+
+      function generateTarget() {
+        targetX = randomInt(minCoord, maxCoord);
+        targetY = randomInt(minCoord, maxCoord);
+        if (targetDisplay) {
+          targetDisplay.textContent = `(${targetX}, ${targetY})`;
+        }
+      }
+
+      function resetStats() {
+        score = 0;
+        round = 0;
+        correctCount = 0;
+        if (scoreDisplay) scoreDisplay.textContent = "0";
+        if (roundDisplay) roundDisplay.textContent = "0";
+        if (correctDisplay) correctDisplay.textContent = "0";
+        if (feedback) {
+          feedback.textContent = "";
+          feedback.className = "feedback";
+        }
+      }
+
+      function startGame() {
+        applyFixedSettings();
+        isRunning = true;
+        resetStats();
+        drawGrid();
+        generateTarget();
+        if (feedback) {
+          feedback.textContent = "点击网格上的整点，找到宝藏！";
+          feedback.className = "feedback";
+        }
+      }
+
+      function endGame() {
+        isRunning = false;
+        if (targetDisplay) {
+          targetDisplay.textContent = "游戏结束";
+        }
+        if (feedback) {
+          feedback.textContent = `你一共找到了 ${correctCount} 个宝藏，最终得分：${score} 分！`;
+          feedback.className = "feedback good";
+        }
+      }
+
+      function nextRound() {
+        round++;
+        if (roundDisplay) {
+          roundDisplay.textContent = round.toString();
+        }
+        if (round > maxRound) {
+          endGame();
+        } else {
+          drawGrid();
+          generateTarget();
+        }
+      }
+
+      function handleClick(event) {
+        if (!isRunning) {
+          return;
+        }
+
+        const { x, y } = screenToGrid(event.clientX, event.clientY);
+
+        // 点击超出坐标范围
+        if (x < 0 || x > maxBase || y < 0 || y > maxBase) {
+          if (feedback) {
+            feedback.textContent = "你点击在坐标系之外了哦！";
+            feedback.className = "feedback bad";
+          }
+          return;
+        }
+
+        // 每次点击先重画坐标系，让标记不乱
+        drawGrid();
+
+        // 标出点击点
+        drawClickPoint(x, y, "#03a9f4");
+
+        if (x === targetX && y === targetY) {
+          score += 10;
+          correctCount++;
+          if (feedback) {
+            feedback.textContent = "太棒了！你找到了宝藏！";
+            feedback.className = "feedback good";
+          }
+          drawTreasure(targetX, targetY);
+          if (scoreDisplay) scoreDisplay.textContent = score.toString();
+          if (correctDisplay) correctDisplay.textContent = correctCount.toString();
+
+          // 稍微延迟一下再进入下一回合，让玩家看到宝藏
+          setTimeout(() => {
+            nextRound();
+          }, 600);
+        } else {
+          score = Math.max(0, score - 2); // 不让分数变成负数
+          if (feedback) {
+            feedback.textContent = `哦不，再试试！你点击的是 (${x}, ${y})。`;
+            feedback.className = "feedback bad";
+          }
+          if (scoreDisplay) scoreDisplay.textContent = score.toString();
+        }
+      }
+
+      // ====== 简单测试用例 ======
+      (function runTests() {
+        // randomInt 测试：结果应始终在区间内
+        for (let i = 0; i < 100; i++) {
+          const v = randomInt(1, 5);
+          console.assert(v >= 1 && v <= 5, "randomInt 超出范围: " + v);
+        }
+
+        // screenToGrid 基本测试：原点和 (1,1) 附近
+        const originScreen = { x: originX, y: originY };
+        const g0 = screenToGrid(originScreen.x, originScreen.y);
+        console.assert(Math.abs(g0.x) <= 1 && Math.abs(g0.y) <= 1, "screenToGrid 原点附近映射异常");
+      })();
+
+      // ====== 事件绑定 ======
+      canvas.addEventListener("click", handleClick);
+      startBtn.addEventListener("click", startGame);
+      restartBtn.addEventListener("click", startGame);
+
+      // 初始绘制一次空坐标系
+      applyFixedSettings();
+      drawGrid();
+    </script>
+  </body>
+</html>
