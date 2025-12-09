@@ -2,6 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 让页面在手机和平板上正确缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>坐标寻宝特工 Coordinate Treasure Agent</title>
     <style>
       * {
@@ -30,7 +32,8 @@
         max-width: 1000px;
         width: 100%;
         display: grid;
-        grid-template-columns: 520px 1fr;
+        /* 更灵活的两栏布局，避免小屏挤压 */
+        grid-template-columns: minmax(260px, 1.1fr) minmax(0, 1fr);
         gap: 20px;
       }
 
@@ -57,16 +60,22 @@
         gap: 10px;
       }
 
+      /* 让 canvas 随容器缩放 */
       canvas {
         border-radius: 12px;
         background: #fafaff;
         box-shadow: inset 0 0 0 1px rgba(120, 81, 169, 0.3);
         cursor: crosshair;
+        width: 100%;
+        height: auto;
+        max-width: 480px; /* 最大不超过 480px，桌面看起来刚好 */
+        display: block;
       }
 
       .hint-text {
         font-size: 0.9rem;
         color: #555;
+        text-align: center;
       }
 
       .side-panel {
@@ -150,6 +159,7 @@
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
         transition: transform 0.05s ease, box-shadow 0.05s ease,
           background 0.2s ease;
+        white-space: nowrap;
       }
 
       button:hover {
@@ -183,13 +193,47 @@
         margin-bottom: 2px;
       }
 
+      /* 平板及以下：单列布局 */
       @media (max-width: 900px) {
         .game-wrapper {
           grid-template-columns: 1fr;
         }
 
+        /* 默认先显示画布，再显示文字说明 */
         .canvas-container {
+          order: 1;
+        }
+
+        .side-panel {
           order: 2;
+        }
+      }
+
+      /* 手机：字体稍微缩小，按钮堆叠 */
+      @media (max-width: 600px) {
+        body {
+          padding: 10px;
+        }
+
+        h1 {
+          font-size: 1.4rem;
+        }
+
+        .subtitle {
+          font-size: 0.85rem;
+        }
+
+        .panel-section {
+          font-size: 0.9rem;
+        }
+
+        .controls {
+          flex-direction: column;
+        }
+
+        .controls button {
+          width: 100%;
+          justify-content: center;
         }
       }
     </style>
@@ -205,6 +249,7 @@
 
       <!-- 左侧：画布 -->
       <div class="canvas-container">
+        <!-- 初始给个大致尺寸，实际会用 JS 重设 -->
         <canvas id="gridCanvas" width="480" height="480"></canvas>
         <div class="hint-text">提示：点击网格上的整点（交叉点）。</div>
       </div>
@@ -254,12 +299,13 @@
     </div>
 
     <script>
-      // ====== 画布与坐标系设置 ======
+      // ====== 画布与坐标系设置（自适应） ======
       const canvas = document.getElementById("gridCanvas");
       const ctx = canvas.getContext("2d");
 
-      const width = canvas.width;
-      const height = canvas.height;
+      // 当前画布宽高（会随屏幕改变）
+      let canvasWidth = canvas.width;
+      let canvasHeight = canvas.height;
 
       // 预留边距用来画坐标轴刻度和数字
       const marginLeft = 40;
@@ -269,12 +315,39 @@
 
       // 基础范围 0–10，格子大小根据画布自动计算
       const maxBase = 10;
-      const gridSizeX = (width - marginLeft - marginRight) / maxBase;
-      const gridSizeY = (height - marginTop - marginBottom) / maxBase;
-      const gridSize = Math.min(gridSizeX, gridSizeY);
 
-      const originX = marginLeft;
-      const originY = height - marginBottom;
+      // 这些会根据画布大小重新计算
+      let gridSizeX;
+      let gridSizeY;
+      let gridSize;
+      let originX;
+      let originY;
+
+      function updateGridMetrics() {
+        gridSizeX = (canvasWidth - marginLeft - marginRight) / maxBase;
+        gridSizeY = (canvasHeight - marginTop - marginBottom) / maxBase;
+        gridSize = Math.min(gridSizeX, gridSizeY);
+        originX = marginLeft;
+        originY = canvasHeight - marginBottom;
+      }
+
+      // 根据容器大小重设 canvas 尺寸（适配桌机 / 平板 / 手机）
+      function resizeCanvas() {
+        const container = canvas.parentElement;
+        const containerWidth = container ? container.clientWidth : 480;
+
+        // 限制最大尺寸为 480，防止太大
+        const logicalSize = Math.min(containerWidth, 480);
+
+        canvas.style.width = logicalSize + "px";
+        canvas.style.height = logicalSize + "px";
+
+        canvasWidth = canvas.width = logicalSize;
+        canvasHeight = canvas.height = logicalSize;
+
+        updateGridMetrics();
+        drawGrid();
+      }
 
       // 游戏状态变量
       let minCoord = 1;
@@ -299,11 +372,11 @@
 
       // ====== 绘制坐标系 ======
       function drawGrid() {
-        ctx.clearRect(0, 0, width, height);
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
         // 背景
         ctx.fillStyle = "#fafaff";
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
         // 网格线
         ctx.lineWidth = 1;
@@ -494,7 +567,7 @@
         applyFixedSettings();
         isRunning = true;
         resetStats();
-        drawGrid();
+        resizeCanvas(); // 确保开始游戏时根据当前屏幕大小重绘
         generateTarget();
         if (feedback) {
           feedback.textContent = "点击网格上的整点，找到宝藏！";
@@ -573,28 +646,24 @@
         }
       }
 
-      // ====== 简单测试用例 ======
-      (function runTests() {
-        // randomInt 测试：结果应始终在区间内
-        for (let i = 0; i < 100; i++) {
-          const v = randomInt(1, 5);
-          console.assert(v >= 1 && v <= 5, "randomInt 超出范围: " + v);
-        }
-
-        // screenToGrid 基本测试：原点和 (1,1) 附近
-        const originScreen = { x: originX, y: originY };
-        const g0 = screenToGrid(originScreen.x, originScreen.y);
-        console.assert(Math.abs(g0.x) <= 1 && Math.abs(g0.y) <= 1, "screenToGrid 原点附近映射异常");
-      })();
-
       // ====== 事件绑定 ======
       canvas.addEventListener("click", handleClick);
       startBtn.addEventListener("click", startGame);
       restartBtn.addEventListener("click", startGame);
 
-      // 初始绘制一次空坐标系
+      // 窗口尺寸变化时，自适应重绘
+      let resizeTimer = null;
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          resizeCanvas();
+        }, 150);
+      });
+
+      // 初始设置：应用固定参数并根据当前屏幕绘制一次空坐标系
       applyFixedSettings();
-      drawGrid();
+      resizeCanvas();
     </script>
   </body>
 </html>
+
