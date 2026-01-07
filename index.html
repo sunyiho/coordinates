@@ -2,7 +2,6 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <!-- 让页面在手机和平板上正确缩放 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>坐标寻宝特工 Coordinate Treasure Agent</title>
     <style>
@@ -32,7 +31,6 @@
         max-width: 1000px;
         width: 100%;
         display: grid;
-        /* 更灵活的两栏布局，避免小屏挤压 */
         grid-template-columns: minmax(260px, 1.1fr) minmax(0, 1fr);
         gap: 20px;
       }
@@ -40,17 +38,9 @@
       h1 {
         grid-column: 1 / -1;
         text-align: center;
-        margin-bottom: 10px;
+        margin-bottom: 20px;
         font-size: 1.8rem;
         color: #6a00b9;
-      }
-
-      .subtitle {
-        grid-column: 1 / -1;
-        text-align: center;
-        margin-bottom: 14px;
-        font-size: 0.95rem;
-        color: #555;
       }
 
       .canvas-container {
@@ -60,7 +50,6 @@
         gap: 10px;
       }
 
-      /* 让 canvas 随容器缩放 */
       canvas {
         border-radius: 12px;
         background: #fafaff;
@@ -68,7 +57,7 @@
         cursor: crosshair;
         width: 100%;
         height: auto;
-        max-width: 480px; /* 最大不超过 480px，桌面看起来刚好 */
+        max-width: 480px;
         display: block;
       }
 
@@ -179,61 +168,27 @@
         box-shadow: none;
       }
 
-      button.secondary:hover {
-        background: #ddd2ff;
-        box-shadow: none;
-      }
-
-      .tips-list {
-        margin-left: 18px;
-        margin-top: 4px;
-      }
-
-      .tips-list li {
-        margin-bottom: 2px;
-      }
-
-      /* 平板及以下：单列布局 */
       @media (max-width: 900px) {
         .game-wrapper {
           grid-template-columns: 1fr;
         }
-
-        /* 默认先显示画布，再显示文字说明 */
         .canvas-container {
           order: 1;
         }
-
         .side-panel {
           order: 2;
         }
       }
 
-      /* 手机：字体稍微缩小，按钮堆叠 */
       @media (max-width: 600px) {
-        body {
-          padding: 10px;
-        }
-
         h1 {
           font-size: 1.4rem;
         }
-
-        .subtitle {
-          font-size: 0.85rem;
-        }
-
-        .panel-section {
-          font-size: 0.9rem;
-        }
-
         .controls {
           flex-direction: column;
         }
-
         .controls button {
           width: 100%;
-          justify-content: center;
         }
       }
     </style>
@@ -242,19 +197,12 @@
   <body>
     <div class="game-wrapper">
       <h1>坐标寻宝特工</h1>
-      <div class="subtitle">
-        任务：在藏宝地图（坐标系）上找到指定的坐标点！先看
-        <strong>x</strong>（左右），再看 <strong>y</strong>（上下）。
-      </div>
 
-      <!-- 左侧：画布 -->
       <div class="canvas-container">
-        <!-- 初始给个大致尺寸，实际会用 JS 重设 -->
         <canvas id="gridCanvas" width="480" height="480"></canvas>
         <div class="hint-text">提示：点击网格上的整点（交叉点）。</div>
       </div>
 
-      <!-- 右侧：信息 + 控制 -->
       <div class="side-panel">
         <div class="panel-section">
           <h2>当前任务</h2>
@@ -286,62 +234,41 @@
             <button id="restartBtn" class="secondary">重新开始</button>
           </div>
         </div>
-
-        <div class="panel-section">
-          <h2>小提示</h2>
-          <ul class="tips-list">
-            <li>坐标写作 <code>(x, y)</code>：先写 x，再写 y。</li>
-            <li>在 x 轴上向左/向右数到 x；再在 y 轴上向上/向下数到 y。</li>
-            <li>本游戏只用到<strong>正整数</strong>坐标，适合 10 岁学生练习。</li>
-          </ul>
-        </div>
       </div>
     </div>
 
     <script>
-      // ====== 画布与坐标系设置（自适应） ======
       const canvas = document.getElementById("gridCanvas");
       const ctx = canvas.getContext("2d");
 
-      // 当前画布宽高（会随屏幕改变）
       let canvasWidth = canvas.width;
       let canvasHeight = canvas.height;
 
-      // 预留边距用来画坐标轴刻度和数字
       const marginLeft = 40;
       const marginBottom = 40;
-      const marginTop = 20;
-      const marginRight = 20;
-
-      // 基础范围 0–10，格子大小根据画布自动计算
+      const marginTop = 30; // 增加顶边距给箭头留空间
+      const marginRight = 30; // 增加右边距给箭头留空间
       const maxBase = 10;
 
-      // 这些会根据画布大小重新计算
-      let gridSizeX;
-      let gridSizeY;
       let gridSize;
       let originX;
       let originY;
 
       function updateGridMetrics() {
-        gridSizeX = (canvasWidth - marginLeft - marginRight) / maxBase;
-        gridSizeY = (canvasHeight - marginTop - marginBottom) / maxBase;
+        const gridSizeX = (canvasWidth - marginLeft - marginRight) / maxBase;
+        const gridSizeY = (canvasHeight - marginTop - marginBottom) / maxBase;
         gridSize = Math.min(gridSizeX, gridSizeY);
         originX = marginLeft;
         originY = canvasHeight - marginBottom;
       }
 
-      // 根据容器大小重设 canvas 尺寸（适配桌机 / 平板 / 手机）
       function resizeCanvas() {
         const container = canvas.parentElement;
         const containerWidth = container ? container.clientWidth : 480;
-
-        // 限制最大尺寸为 480，防止太大
         const logicalSize = Math.min(containerWidth, 480);
 
         canvas.style.width = logicalSize + "px";
         canvas.style.height = logicalSize + "px";
-
         canvasWidth = canvas.width = logicalSize;
         canvasHeight = canvas.height = logicalSize;
 
@@ -349,18 +276,14 @@
         drawGrid();
       }
 
-      // 游戏状态变量
-      let minCoord = 1;
-      let maxCoord = 10; // 范围固定为 1–10
       let targetX = null;
       let targetY = null;
       let score = 0;
       let round = 0;
-      let maxRound = 10; // 默认固定10回合
+      let maxRound = 10;
       let correctCount = 0;
       let isRunning = false;
 
-      // UI 元素
       const targetDisplay = document.getElementById("targetDisplay");
       const feedback = document.getElementById("feedback");
       const scoreDisplay = document.getElementById("scoreDisplay");
@@ -370,107 +293,71 @@
       const startBtn = document.getElementById("startBtn");
       const restartBtn = document.getElementById("restartBtn");
 
-      // ====== 绘制坐标系 ======
+      // 绘制箭头的辅助函数
+      function drawArrow(fromX, fromY, toX, toY) {
+        const headlen = 10; // 箭头长度
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(toX, toY);
+        ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+      }
+
       function drawGrid() {
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-        // 背景
         ctx.fillStyle = "#fafaff";
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        // 网格线
+        // 绘制背景网格
         ctx.lineWidth = 1;
         ctx.strokeStyle = "#e0ddff";
         ctx.beginPath();
         for (let i = 0; i <= maxBase; i++) {
           const x = originX + i * gridSize;
-          const yTop = originY - maxBase * gridSize;
-
-          // 竖线
           ctx.moveTo(x, originY);
-          ctx.lineTo(x, yTop);
+          ctx.lineTo(x, originY - maxBase * gridSize);
 
           const y = originY - i * gridSize;
-          const xRight = originX + maxBase * gridSize;
-
-          // 横线
           ctx.moveTo(originX, y);
-          ctx.lineTo(xRight, y);
+          ctx.lineTo(originX + maxBase * gridSize, y);
         }
         ctx.stroke();
 
-        // 坐标轴
+        // 绘制轴线（带箭头）
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#9c27b0";
-        ctx.beginPath();
-
-        // x 轴
-        ctx.moveTo(originX, originY);
-        ctx.lineTo(originX + maxBase * gridSize + 10, originY);
-
-        // y 轴
-        ctx.moveTo(originX, originY);
-        ctx.lineTo(originX, originY - maxBase * gridSize - 10);
-        ctx.stroke();
-
-        // x、y 轴箭头
-        ctx.beginPath();
-
-        // x arrow
-        let ax = originX + maxBase * gridSize + 10;
-        let ay = originY;
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - 8, ay - 4);
-        ctx.lineTo(ax - 8, ay + 4);
-        ctx.closePath();
         ctx.fillStyle = "#9c27b0";
-        ctx.fill();
+        
+        // X轴箭头
+        drawArrow(originX, originY, originX + maxBase * gridSize + 20, originY);
+        // Y轴箭头
+        drawArrow(originX, originY, originX, originY - maxBase * gridSize - 20);
 
-        // y arrow
-        ax = originX;
-        ay = originY - maxBase * gridSize - 10;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - 4, ay + 8);
-        ctx.lineTo(ax + 4, ay + 8);
-        ctx.closePath();
-        ctx.fill();
-
-        // 刻度数字
-        ctx.fillStyle = "#6a00b9";
-        ctx.font = "22px system-ui, sans-serif";
-
-        // x 轴数字：0–10
+        // 绘制刻度标签
+        ctx.font = "bold 14px system-ui";
         ctx.textAlign = "center";
-        ctx.textBaseline = "top";
         for (let i = 0; i <= maxBase; i++) {
-          const x = originX + i * gridSize;
-          const yLabel = originY + 5;
-          ctx.fillText(i.toString(), x, yLabel);
+          ctx.fillText(i.toString(), originX + i * gridSize, originY + 22);
         }
-
-        // y 轴数字：1–10（不重复 0）
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
         for (let i = 1; i <= maxBase; i++) {
-          const y = originY - i * gridSize;
-          const xLabel = originX - 5;
-          ctx.fillText(i.toString(), xLabel, y);
+          ctx.fillText(i.toString(), originX - 10, originY - i * gridSize);
         }
 
-        // 轴名称
-        ctx.fillStyle = "#9c27b0";
-        ctx.font = "26px system-ui, sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText("x", originX + maxBase * gridSize + 40, originY + 20);
-
-        ctx.textAlign = "right";
-        ctx.textBaseline = "bottom";
-        ctx.fillText("y", originX - 35, originY - maxBase * gridSize - 20);
+        // 绘制轴标签
+        ctx.font = "italic bold 16px serif";
+        ctx.fillText("x", originX + maxBase * gridSize + 25, originY + 15);
+        ctx.fillText("y", originX - 15, originY - maxBase * gridSize - 20);
       }
 
-      // 画点击的点
       function drawClickPoint(x, y, color) {
         const px = originX + x * gridSize;
         const py = originY - y * gridSize;
@@ -480,190 +367,96 @@
         ctx.fill();
       }
 
-      // 画宝藏（用小星星表示）
       function drawTreasure(x, y) {
         const px = originX + x * gridSize;
         const py = originY - y * gridSize;
-        const rOuter = 10;
-        const rInner = 5;
-        const spikes = 5;
-        let rot = (Math.PI / 2) * 3;
-        let step = Math.PI / spikes;
-
+        const rOuter = 12, rInner = 6, spikes = 5;
+        let rot = (Math.PI / 2) * 3, step = Math.PI / spikes;
         ctx.beginPath();
         ctx.moveTo(px, py - rOuter);
         for (let i = 0; i < spikes; i++) {
-          let xOuter = px + Math.cos(rot) * rOuter;
-          let yOuter = py + Math.sin(rot) * rOuter;
-          ctx.lineTo(xOuter, yOuter);
+          ctx.lineTo(px + Math.cos(rot) * rOuter, py + Math.sin(rot) * rOuter);
           rot += step;
-
-          let xInner = px + Math.cos(rot) * rInner;
-          let yInner = py + Math.sin(rot) * rInner;
-          ctx.lineTo(xInner, yInner);
+          ctx.lineTo(px + Math.cos(rot) * rInner, py + Math.sin(rot) * rInner);
           rot += step;
         }
-        ctx.lineTo(px, py - rOuter);
         ctx.closePath();
         ctx.fillStyle = "#ffb300";
+        ctx.fill();
         ctx.strokeStyle = "#f57c00";
         ctx.lineWidth = 2;
-        ctx.fill();
         ctx.stroke();
       }
 
-      // ====== 工具函数 ======
-      function randomInt(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-      }
-
-      function screenToGrid(mouseX, mouseY) {
-        const rect = canvas.getBoundingClientRect();
-        const xInCanvas = mouseX - rect.left;
-        const yInCanvas = mouseY - rect.top;
-
-        const dx = xInCanvas - originX;
-        const dy = originY - yInCanvas; // 注意 y 方向
-
-        const gridX = Math.round(dx / gridSize);
-        const gridY = Math.round(dy / gridSize);
-
-        return { x: gridX, y: gridY };
-      }
-
-      // ====== 游戏逻辑 ======
-      function applyFixedSettings() {
-        // 坐标范围固定 1–10，回合数固定 10
-        minCoord = 1;
-        maxCoord = 10;
-        maxRound = 10;
-        if (maxRoundDisplay) {
-          maxRoundDisplay.textContent = maxRound.toString();
-        }
+      function startGame() {
+        isRunning = true;
+        score = 0;
+        round = 1;
+        correctCount = 0;
+        scoreDisplay.textContent = "0";
+        roundDisplay.textContent = "1";
+        correctDisplay.textContent = "0";
+        feedback.textContent = "";
+        resizeCanvas();
+        generateTarget();
       }
 
       function generateTarget() {
-        targetX = randomInt(minCoord, maxCoord);
-        targetY = randomInt(minCoord, maxCoord);
-        if (targetDisplay) {
-          targetDisplay.textContent = `(${targetX}, ${targetY})`;
-        }
-      }
-
-      function resetStats() {
-        score = 0;
-        round = 0;
-        correctCount = 0;
-        if (scoreDisplay) scoreDisplay.textContent = "0";
-        if (roundDisplay) roundDisplay.textContent = "0";
-        if (correctDisplay) correctDisplay.textContent = "0";
-        if (feedback) {
-          feedback.textContent = "";
-          feedback.className = "feedback";
-        }
-      }
-
-      function startGame() {
-        applyFixedSettings();
-        isRunning = true;
-        resetStats();
-        resizeCanvas(); // 确保开始游戏时根据当前屏幕大小重绘
-        generateTarget();
-        if (feedback) {
-          feedback.textContent = "点击网格上的整点，找到宝藏！";
-          feedback.className = "feedback";
-        }
-      }
-
-      function endGame() {
-        isRunning = false;
-        if (targetDisplay) {
-          targetDisplay.textContent = "游戏结束";
-        }
-        if (feedback) {
-          feedback.textContent = `你一共找到了 ${correctCount} 个宝藏，最终得分：${score} 分！`;
-          feedback.className = "feedback good";
-        }
-      }
-
-      function nextRound() {
-        round++;
-        if (roundDisplay) {
-          roundDisplay.textContent = round.toString();
-        }
-        if (round > maxRound) {
-          endGame();
-        } else {
-          drawGrid();
-          generateTarget();
-        }
+        targetX = Math.floor(Math.random() * 10) + 1;
+        targetY = Math.floor(Math.random() * 10) + 1;
+        targetDisplay.textContent = `(${targetX}, ${targetY})`;
       }
 
       function handleClick(event) {
-        if (!isRunning) {
-          return;
-        }
+        if (!isRunning) return;
 
-        const { x, y } = screenToGrid(event.clientX, event.clientY);
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
 
-        // 点击超出坐标范围
-        if (x < 0 || x > maxBase || y < 0 || y > maxBase) {
-          if (feedback) {
-            feedback.textContent = "你点击在坐标系之外了哦！";
-            feedback.className = "feedback bad";
-          }
-          return;
-        }
+        const gridX = Math.round((mouseX - originX) / gridSize);
+        const gridY = Math.round((originY - mouseY) / gridSize);
 
-        // 每次点击先重画坐标系，让标记不乱
+        if (gridX < 0 || gridX > maxBase || gridY < 0 || gridY > maxBase) return;
+
         drawGrid();
+        drawClickPoint(gridX, gridY, "#03a9f4");
 
-        // 标出点击点
-        drawClickPoint(x, y, "#03a9f4");
-
-        if (x === targetX && y === targetY) {
+        if (gridX === targetX && gridY === targetY) {
           score += 10;
           correctCount++;
-          if (feedback) {
-            feedback.textContent = "太棒了！你找到了宝藏！";
-            feedback.className = "feedback good";
-          }
+          scoreDisplay.textContent = score;
+          correctDisplay.textContent = correctCount;
+          feedback.textContent = ""; 
           drawTreasure(targetX, targetY);
-          if (scoreDisplay) scoreDisplay.textContent = score.toString();
-          if (correctDisplay) correctDisplay.textContent = correctCount.toString();
 
-          // 稍微延迟一下再进入下一回合，让玩家看到宝藏
           setTimeout(() => {
-            nextRound();
+            round++;
+            if (round > maxRound) {
+              isRunning = false;
+              targetDisplay.textContent = "游戏结束";
+              feedback.textContent = `挑战完成！最终得分：${score}`;
+              feedback.className = "feedback good";
+            } else {
+              roundDisplay.textContent = round;
+              drawGrid();
+              generateTarget();
+            }
           }, 600);
         } else {
-          score = Math.max(0, score - 2); // 不让分数变成负数
-          if (feedback) {
-            feedback.textContent = `哦不，再试试！你点击的是 (${x}, ${y})。`;
-            feedback.className = "feedback bad";
-          }
-          if (scoreDisplay) scoreDisplay.textContent = score.toString();
+          score = Math.max(0, score - 2);
+          scoreDisplay.textContent = score;
+          feedback.textContent = `不对哦，那是 (${gridX}, ${gridY})`;
+          feedback.className = "feedback bad";
         }
       }
 
-      // ====== 事件绑定 ======
       canvas.addEventListener("click", handleClick);
       startBtn.addEventListener("click", startGame);
       restartBtn.addEventListener("click", startGame);
+      window.addEventListener("resize", resizeCanvas);
 
-      // 窗口尺寸变化时，自适应重绘
-      let resizeTimer = null;
-      window.addEventListener("resize", () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-          resizeCanvas();
-        }, 150);
-      });
-
-      // 初始设置：应用固定参数并根据当前屏幕绘制一次空坐标系
-      applyFixedSettings();
       resizeCanvas();
     </script>
   </body>
 </html>
-
